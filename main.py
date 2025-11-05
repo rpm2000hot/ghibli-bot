@@ -1,21 +1,16 @@
 import os
-import openai
 import requests
 from flask import Flask, request
 from telegram import Update, Bot, InputFile
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from openai import OpenAI
+import asyncio
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
@@ -36,13 +31,13 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📌 لطفاً متنی برای ترجمه ارسال کن.")
         return
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": f"ترجمه کن به انگلیسی:\n{text}"}]
         )
         await update.message.reply_text(f"🌍 ترجمه:\n{response.choices[0].message.content}")
-    except:
-        await update.message.reply_text("❌ خطا در ترجمه.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ خطا در ترجمه.\n{e}")
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.replace("/summarize", "").strip()
@@ -50,13 +45,13 @@ async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📌 لطفاً متنی برای خلاصه‌سازی ارسال کن.")
         return
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": f"لطفاً این متن را خلاصه کن:\n{text}"}]
         )
         await update.message.reply_text(f"📄 خلاصه:\n{response.choices[0].message.content}")
-    except:
-        await update.message.reply_text("❌ خطا در خلاصه‌سازی.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ خطا در خلاصه‌سازی.\n{e}")
 
 async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = update.message.text.replace("/imagine", "").strip()
@@ -64,18 +59,18 @@ async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📌 لطفاً یک توضیح برای تصویر بنویس.")
         return
     try:
-        response = openai.Image.create(
+        response = client.images.generate(
+            model="gpt-image-1",
             prompt=f"Ghibli-style illustration: {prompt}",
-            n=1,
             size="512x512"
         )
-        image_url = response['data'][0]['url']
+        image_url = response.data[0].url
         image_data = requests.get(image_url).content
         with open("generated.jpg", "wb") as f:
             f.write(image_data)
         await update.message.reply_photo(photo=InputFile("generated.jpg"), caption="🎨 تصویر تولید شد!")
-    except:
-        await update.message.reply_text("⚠️ خطا در تولید تصویر.")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ خطا در تولید تصویر.\n{e}")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📌 لطفاً از دستورات /translate، /summarize یا /imagine استفاده کن.")
@@ -93,10 +88,11 @@ telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    telegram_app.update_queue.put(update)
+    telegram_app.process_update(update)
     return "ok"
 
-if name == "main":
+if __name__ == "__main__":
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
     from waitress import serve
+    asyncio.run(telegram_app.initialize())
     serve(app, host="0.0.0.0", port=5000)
