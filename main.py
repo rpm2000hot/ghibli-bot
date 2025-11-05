@@ -18,7 +18,10 @@ openai.api_key = OPENAI_API_KEY
 # دستور شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎨 خوش آمدی به ربات جیبلی‌ساز!\n- عکس بفرست تا به سبک جیبلی بازسازی بشه\n- متن بفرست تا با ChatGPT صحبت کنیم\n- دستور /help برای راهنما"
+        "🎨 خوش آمدی به ربات جیبلی‌ساز!\n"
+        "- عکس بفرست تا به سبک جیبلی بازسازی بشه\n"
+        "- متن بفرست تا با ChatGPT صحبت کنیم\n"
+        "- دستور /help برای راهنما"
     )
 
 # راهنما
@@ -40,19 +43,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply = response.choices[0].message.content
         await update.message.reply_text(reply)
-    except Exception:
-        await update.message.reply_text("❌ مشکلی در ارتباط با OpenAI پیش آمد.")
+    except Exception as e:
+        await update.message.reply_text(
+            "❌ مشکلی در ارتباط با OpenAI پیش آمد.\n"
+            "لطفاً کلید API را بررسی کن یا چند دقیقه دیگر دوباره تلاش کن."
+        )
 
 # تبدیل عکس به سبک جیبلی با DALL·E
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update.message.reply_text("🖼️ در حال دریافت تصویر...")
 
-        # دریافت عکس
         photo_file = await update.message.photo[-1].get_file()
         photo_path = await photo_file.download_to_drive("input.jpg")
 
-        # تولید تصویر جدید با دستور متنی
         prompt = "A Studio Ghibli-style illustration of the uploaded photo, dreamy and magical"
         response = openai.Image.create(
             prompt=prompt,
@@ -72,7 +76,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except Exception as e:
-        await update.message.reply_text("⚠️ خطایی در پردازش تصویر رخ داد.")
+        await update.message.reply_text(
+            "⚠️ خطایی در پردازش تصویر رخ داد.\n"
+            "ممکنه کلید OpenAI اشتباه باشه یا مدل تصویر فعال نباشه."
+        )
 
 # ساخت اپلیکیشن
 app = ApplicationBuilder().token(BOT_TOKEN).build()
