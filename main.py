@@ -1,11 +1,11 @@
 import os
-import requests
 import openai
+import requests
 from telegram import Update, InputFile
 from telegram.ext import (
     ApplicationBuilder,
-    MessageHandler,
     CommandHandler,
+    MessageHandler,
     ContextTypes,
     filters,
 )
@@ -18,22 +18,19 @@ openai.api_key = OPENAI_API_KEY
 # دستور شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎨 خوش آمدی به ربات جیبلی!\n"
-        "- عکس بفرست تا به سبک جیبلی تبدیل کنم\n"
-        "- متن بفرست تا با ChatGPT پاسخ بدم\n"
-        "- دستور /help برای راهنما"
+        "🎨 خوش آمدی به ربات جیبلی‌ساز!\n- عکس بفرست تا به سبک جیبلی بازسازی بشه\n- متن بفرست تا با ChatGPT صحبت کنیم\n- دستور /help برای راهنما"
     )
 
-# دستور راهنما
+# راهنما
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📌 راهنمای استفاده:\n"
-        "- عکس بفرست تا به سبک جیبلی تبدیل بشه\n"
+        "📌 راهنما:\n"
+        "- عکس بفرست تا به سبک جیبلی بازسازی بشه\n"
         "- متن بفرست تا پاسخ هوشمند بگیری\n"
         "- دستور /start برای شروع دوباره"
     )
 
-# پاسخ به پیام‌های متنی با ChatGPT
+# پاسخ متنی با ChatGPT
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     try:
@@ -46,30 +43,36 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("❌ مشکلی در ارتباط با OpenAI پیش آمد.")
 
-# پردازش عکس با API فرضی جیبلی
+# تبدیل عکس به سبک جیبلی با DALL·E
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        photo_file = await update.message.photo[-1].get_file()
-        photo_bytes = await photo_file.download_as_bytearray()
+        await update.message.reply_text("🖼️ در حال دریافت تصویر...")
 
-        # ⚠️ این آدرس باید با API واقعی جایگزین شود
-        response = requests.post(
-            "https://ghibliart.ai/api/process",
-            files={"image": ("photo.jpg", photo_bytes)},
-            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+        # دریافت عکس
+        photo_file = await update.message.photo[-1].get_file()
+        photo_path = await photo_file.download_to_drive("input.jpg")
+
+        # تولید تصویر جدید با دستور متنی
+        prompt = "A Studio Ghibli-style illustration of the uploaded photo, dreamy and magical"
+        response = openai.Image.create(
+            prompt=prompt,
+            n=1,
+            size="512x512"
         )
 
-        if response.status_code == 200:
-            with open("ghibli_result.jpg", "wb") as f:
-                f.write(response.content)
-            await update.message.reply_photo(
-                photo=InputFile("ghibli_result.jpg"),
-                caption="✨ تصویر شما به سبک جیبلی آماده است!"
-            )
-        else:
-            await update.message.reply_text("❌ پردازش تصویر موفق نبود.")
-    except Exception:
-        await update.message.reply_text("⚠️ خطایی در دریافت یا ارسال تصویر رخ داد.")
+        image_url = response['data'][0]['url']
+        image_data = requests.get(image_url).content
+
+        with open("ghibli_output.jpg", "wb") as f:
+            f.write(image_data)
+
+        await update.message.reply_photo(
+            photo=InputFile("ghibli_output.jpg"),
+            caption="✨ تصویر شما به سبک جیبلی آماده است!"
+        )
+
+    except Exception as e:
+        await update.message.reply_text("⚠️ خطایی در پردازش تصویر رخ داد.")
 
 # ساخت اپلیکیشن
 app = ApplicationBuilder().token(BOT_TOKEN).build()
