@@ -20,66 +20,83 @@ bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-# هندلر شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎨 سلام! عکس بفرست تا به سبک جیبلی بازسازی بشه.")
+    await update.message.reply_text(
+        "🎨 سلام! من ربات جیبلی‌ساز هستم.\n"
+        "- متن بفرست برای پاسخ هوشمند\n"
+        "- /translate برای ترجمه\n"
+        "- /summarize برای خلاصه‌سازی\n"
+        "- /imagine برای تولید تصویر از متن\n"
+        "- عکس بفرست تا به سبک جیبلی بازسازی بشه"
+    )
 
-# هندلر متن
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.replace("/translate", "").strip()
+    if not text:
+        await update.message.reply_text("📌 لطفاً متنی برای ترجمه ارسال کن.")
+        return
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": update.message.text}]
+            messages=[{"role": "user", "content": f"ترجمه کن به انگلیسی:\n{text}"}]
         )
-        reply = response.choices[0].message.content
-        await update.message.reply_text(reply)
-    except Exception:
-        await update.message.reply_text("❌ خطا در ارتباط با OpenAI.")
+        await update.message.reply_text(f"🌍 ترجمه:\n{response.choices[0].message.content}")
+    except:
+        await update.message.reply_text("❌ خطا در ترجمه.")
 
-# هندلر عکس
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.replace("/summarize", "").strip()
+    if not text:
+        await update.message.reply_text("📌 لطفاً متنی برای خلاصه‌سازی ارسال کن.")
+        return
     try:
-        await update.message.reply_text("🖼️ در حال دریافت تصویر...")
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": f"لطفاً این متن را خلاصه کن:\n{text}"}]
+        )
+        await update.message.reply_text(f"📄 خلاصه:\n{response.choices[0].message.content}")
+    except:
+        await update.message.reply_text("❌ خطا در خلاصه‌سازی.")
 
-        # دریافت عکس
-        photo_file = await update.message.photo[-1].get_file()
-        photo_path = await photo_file.download_to_drive("input.jpg")
-
-        # تولید تصویر جدید با سبک جیبلی
-        prompt = "A Studio Ghibli-style illustration of a person in a dreamy forest, magical and soft colors"
+async def imagine(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    prompt = update.message.text.replace("/imagine", "").strip()
+    if not prompt:
+        await update.message.reply_text("📌 لطفاً یک توضیح برای تصویر بنویس.")
+        return
+    try:
         response = openai.Image.create(
-            prompt=prompt,
+            prompt=f"Ghibli-style illustration: {prompt}",
             n=1,
             size="512x512"
         )
-
         image_url = response['data'][0]['url']
         image_data = requests.get(image_url).content
-
-        with open("ghibli_output.jpg", "wb") as f:
+        with open("generated.jpg", "wb") as f:
             f.write(image_data)
+        await update.message.reply_photo(photo=InputFile("generated.jpg"), caption="🎨 تصویر تولید شد!")
+    except:
+        await update.message.reply_text("⚠️ خطا در تولید تصویر.")
 
-        await update.message.reply_photo(
-            photo=InputFile("ghibli_output.jpg"),
-            caption="✨ تصویر شما به سبک جیبلی آماده است!"
-        )
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📌 لطفاً از دستورات /translate، /summarize یا /imagine استفاده کن.")
 
-    except Exception:
-        await update.message.reply_text("⚠️ خطا در پردازش تصویر. لطفاً بعداً دوباره تلاش کن.")
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✨ دریافت تصویر... (در نسخه بعدی تبدیل به سبک جیبلی فعال می‌شود)")
 
-# افزودن هندلرها
 telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^/translate"), translate))
+telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^/summarize"), summarize))
+telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^/imagine"), imagine))
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-# مسیر Webhook
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
+update = Update.de_json(request.get_json(force=True), bot)
     telegram_app.update_queue.put(update)
     return "ok"
 
-# اجرای Flask و تنظیم Webhook
-if __name__ == "__main__":
+if name == "main":
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    app.run(host="0.0.0.0", port=5000)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=5000)
