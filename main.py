@@ -92,7 +92,7 @@ telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
-update = Update.de_json(request.get_json(force=True), bot)
+    update = Update.de_json(request.get_json(force=True), bot)
     telegram_app.update_queue.put(update)
     return "ok"
 
