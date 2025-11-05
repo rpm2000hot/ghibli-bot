@@ -18,7 +18,10 @@ openai.api_key = OPENAI_API_KEY
 # دستور شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎨 خوش آمدی به ربات جیبلی!\n- عکس بفرست تا به سبک جیبلی تبدیل کنم\n- متن بفرست تا با ChatGPT پاسخ بدم\n- دستور /help برای راهنما"
+        "🎨 خوش آمدی به ربات جیبلی!\n"
+        "- عکس بفرست تا به سبک جیبلی تبدیل کنم\n"
+        "- متن بفرست تا با ChatGPT پاسخ بدم\n"
+        "- دستور /help برای راهنما"
     )
 
 # دستور راهنما
@@ -43,15 +46,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("❌ مشکلی در ارتباط با OpenAI پیش آمد.")
 
-# پردازش عکس با FluxAI
+# پردازش عکس با API فرضی جیبلی
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         photo_file = await update.message.photo[-1].get_file()
         photo_bytes = await photo_file.download_as_bytearray()
 
-        # ارسال به FluxAI برای تبدیل به سبک جیبلی
+        # ⚠️ این آدرس باید با API واقعی جایگزین شود
         response = requests.post(
-            "https://fluxai.art/api/ghibli",
+            "https://ghibliart.ai/api/process",
             files={"image": ("photo.jpg", photo_bytes)},
             headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
         )
