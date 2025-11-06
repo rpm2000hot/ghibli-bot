@@ -1,6 +1,7 @@
+
 python-telegram-bot==20.7
-flask
-waitress
-python-dotenv
-requests
-openai
+flask==3.1.2
+waitress==3.0.2
+python-dotenv==1.0.0
+openai==2.7.1
+requests==2.32.3
