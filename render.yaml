@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ghibli-anime-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh
+    repo: https://github.com/username/ghibli-anime-bot
+    branch: main
+    autoDeploy: true

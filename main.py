@@ -1,44 +1,77 @@
-
+import logging
 import os
-from flask import Flask, request
+import torch
+from PIL import Image
+from io import BytesIO
+from torchvision import transforms
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from waitress import serve
-from dotenv import load_dotenv
-import asyncio
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from animegan2_pytorch import Generator
+import requests
 
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+# 🔐 توکن ربات تلگرام
+TOKEN = "8073634487:AAEn3ZxqfUYtGCmQm3HoW21HjcdzDgV0ziU"
 
-app = Flask(__name__)
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+# 📦 مسیر و لینک مدل
+MODEL_PATH = "paprika.pt"
+MODEL_URL = "https://huggingface.co/vumichien/AnimeGANv2_Paprika/resolve/main/paprika.pt"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام! ربات وبهوک من فعاله ✅")
+# 📥 دانلود مدل در صورت نیاز
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        print("📥 در حال دانلود مدل AnimeGANv2...")
+        response = requests.get(MODEL_URL)
+        with open(MODEL_PATH, "wb") as f:
+            f.write(response.content)
+        print("✅ مدل دانلود شد.")
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"گفتی: {update.message.text}")
+# 🧠 بارگذاری مدل
+download_model()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = Generator().to(device)
+model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+model.eval()
 
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+# 🎨 تبدیل تصویر به انیمه
+def convert_to_anime(image: Image.Image) -> BytesIO:
+    transform = transforms.Compose([
+        transforms.Resize((512, 512)),
+        transforms.ToTensor(),
+    ])
+    input_tensor = transform(image).unsqueeze(0).to(device)
 
-@app.route("/webhook", methods=["POST"])
-async def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, telegram_app.bot)
-    await telegram_app.process_update(update)
-    return "ok", 200
+    with torch.no_grad():
+        output_tensor = model(input_tensor)[0].cpu()
+    output_image = transforms.ToPILImage()(output_tensor.clamp(0, 1))
 
-@app.route("/", methods=["GET"])
-def home():
-    return "Telegram Bot is running via Webhook!", 200
+    output_bytes = BytesIO()
+    output_image.save(output_bytes, format='JPEG')
+    output_bytes.seek(0)
+    return output_bytes
 
-async def set_webhook():
-    await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-    print(f"✅ Webhook set to: {WEBHOOK_URL}/webhook")
+# 🤖 هندلرهای ربات
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("سلام! عکس بفرست تا به سبک انیمه جیبلی تبدیلش کنم 🎨")
 
-if __name__ == "__main__":
-    asyncio.run(set_webhook())
-    print("🚀 Starting server with Waitress on port 8080...")
-    serve(app, host="0.0.0.0", port=8080)
+def handle_photo(update: Update, context: CallbackContext):
+    photo_file = update.message.photo[-1].get_file()
+    photo_bytes = BytesIO()
+    photo_file.download(out=photo_bytes)
+    photo_bytes.seek(0)
+
+    image = Image.open(photo_bytes).convert("RGB")
+    anime_image = convert_to_anime(image)
+
+    update.message.reply_photo(photo=anime_image, caption="✨ تصویر انیمه‌شده آماده‌ست!")
+
+# 🚀 اجرای ربات
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
